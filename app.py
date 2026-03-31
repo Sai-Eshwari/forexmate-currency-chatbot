@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 import requests
 import re
 import traceback
@@ -7,80 +7,58 @@ app = Flask(__name__)
 
 @app.route("/")
 def home():
-    return "Server is running!"
+    return render_template("index.html")
 
 API_KEY = "6bacccc6e083e41a93b2b10f"
 
-# 🔥 CURRENCY MAPPING
 mapping = {
-    "usd": "USD", "dollar": "USD", "dollars": "USD", "$": "USD", "us dollar": "USD",
-    "inr": "INR", "rupee": "INR", "rupees": "INR", "₹": "INR", "indian rupee": "INR",
-    "jpy": "JPY", "yen": "JPY", "¥": "JPY", "japanese yen": "JPY",
-    "eur": "EUR", "euro": "EUR", "euros": "EUR", "€": "EUR",
-    "gbp": "GBP", "pound": "GBP", "pounds": "GBP", "£": "GBP", "british pound": "GBP",
-    "cny": "CNY", "yuan": "CNY", "renminbi": "CNY", "元": "CNY",
-    "cad": "CAD", "canadian dollar": "CAD",
-    "aud": "AUD", "australian dollar": "AUD",
-    "sgd": "SGD", "singapore dollar": "SGD",
-    "aed": "AED", "dirham": "AED",
-    "chf": "CHF", "swiss franc": "CHF",
-    "krw": "KRW", "won": "KRW", "korean won": "KRW",
-    "rub": "RUB", "ruble": "RUB", "rouble": "RUB",
-    "try": "TRY", "lira": "TRY", "turkish lira": "TRY",
-    "zar": "ZAR", "rand": "ZAR", "south african rand": "ZAR"
+    "usd": "USD", "dollar": "USD", "dollars": "USD", "$": "USD",
+    "inr": "INR", "rupee": "INR", "rupees": "INR", "₹": "INR",
+    "jpy": "JPY", "yen": "JPY", "¥": "JPY",
+    "eur": "EUR", "euro": "EUR", "€": "EUR",
+    "gbp": "GBP", "pound": "GBP", "£": "GBP",
+    "cny": "CNY", "yuan": "CNY",
+    "cad": "CAD", "aud": "AUD", "sgd": "SGD",
+    "aed": "AED", "chf": "CHF", "krw": "KRW",
 }
 
-# ✅ Normalize currency
 def normalize(curr):
     curr = str(curr).lower().strip()
-
     if curr in mapping:
         return mapping[curr]
-
     for key in mapping:
         if key in curr:
             return mapping[key]
-
     return curr.upper()
 
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    req = request.get_json()
-
     try:
-        if not req:
-            return jsonify({"fulfillmentText": "Invalid request"})
+        req = request.get_json(force=True)
 
-        # =====================================
-        # ✅ CASE 1: UI INPUT
-        # =====================================
+        # ================= UI MODE =================
         if "query" in req:
-            query = req["query"].lower()
+            query = req["query"].lower().strip()
 
-            match = re.search(
-                r'(\d+)?\s*([a-zA-Z₹$€¥£]+)\s*(to|in)\s*([a-zA-Z₹$€¥£]+)',
-                query
-            )
+            import re
+            match = re.search(r'(\d+(?:\.\d+)?)\s*([a-zA-Z₹$€¥£]+)\s*(to|in)\s*([a-zA-Z₹$€¥£]+)', query)
 
             if not match:
                 return jsonify({
                     "fulfillmentText": "❌ Try: 1 USD to INR"
                 })
 
-            amount = match.group(1)
-            amount = float(amount) if amount else 1
-
+            amount = float(match.group(1))
             from_currency = normalize(match.group(2))
             to_currency = normalize(match.group(4))
 
-        # =====================================
-        # ✅ CASE 2: DIALOGFLOW INPUT
-        # =====================================
+        # ================= DIALOGFLOW MODE =================
         else:
-            params = req['queryResult']['parameters']
+            params = req.get('queryResult', {}).get('parameters', {})
 
             amount = params.get('number', 1)
+
             if isinstance(amount, list):
                 amount = amount[0]
 
@@ -89,6 +67,7 @@ def webhook():
 
             if isinstance(from_currency, list):
                 from_currency = from_currency[0]
+
             if isinstance(to_currency, list):
                 to_currency = to_currency[0]
 
@@ -98,25 +77,27 @@ def webhook():
 
             if not from_currency or not to_currency:
                 return jsonify({
-                    "fulfillmentText": "❌ Please specify both currencies"
+                    "fulfillmentText": "⚠️ Missing currency. Try again."
                 })
 
             from_currency = normalize(from_currency)
             to_currency = normalize(to_currency)
 
-        # =====================================
-        # ✅ API CALL
-        # =====================================
+        # ================= API =================
         url = f"https://v6.exchangerate-api.com/v6/{API_KEY}/latest/{from_currency}"
         response = requests.get(url).json()
 
         if response.get("result") != "success":
-            raise Exception("API failed")
+            return jsonify({
+                "fulfillmentText": "⚠️ API error. Try again later."
+            })
 
         rate = response['conversion_rates'].get(to_currency)
 
-        if rate is None:
-            raise Exception("Invalid currency")
+        if not rate:
+            return jsonify({
+                "fulfillmentText": "⚠️ Invalid currency"
+            })
 
         result = float(amount) * rate
 
@@ -125,7 +106,10 @@ def webhook():
         })
 
     except Exception as e:
+        print("ERROR:", e)
+        import traceback
         traceback.print_exc()
+
         return jsonify({
             "fulfillmentText": "⚠️ Something went wrong. Try again."
         })
