@@ -129,10 +129,10 @@ It uses gunicorn as the production server.
 ![Conversion](screenshots/conversion.png)
 
 ### Dialogflow NLP Integration
-![Dialogflow](screenshots/dialogflow.png)
+![Dialogflow](screenshots/Dialogflow.png)
 
 ### Telegram Bot Integration
-![Telegram](screenshots/telegram.png)
+![Telegram](screenshots/Telegram.png)
 
 ---
 
