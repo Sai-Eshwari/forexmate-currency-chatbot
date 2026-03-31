@@ -12,52 +12,22 @@ API_KEY = "6bacccc6e083e41a93b2b10f"
 
 # 🔥 UNIVERSAL CURRENCY MAPPING
 mapping = {
-    # USD
     "usd": "USD", "dollar": "USD", "dollars": "USD", "$": "USD", "us dollar": "USD",
-
-    # INR
     "inr": "INR", "rupee": "INR", "rupees": "INR", "₹": "INR", "indian rupee": "INR",
-
-    # JPY
     "jpy": "JPY", "yen": "JPY", "¥": "JPY", "japanese yen": "JPY",
-
-    # EUR
     "eur": "EUR", "euro": "EUR", "euros": "EUR", "€": "EUR",
-
-    # GBP
     "gbp": "GBP", "pound": "GBP", "pounds": "GBP", "£": "GBP", "british pound": "GBP",
-
-    # CNY
     "cny": "CNY", "yuan": "CNY", "renminbi": "CNY", "元": "CNY",
-
-    # CAD
     "cad": "CAD", "canadian dollar": "CAD",
-
-    # AUD
     "aud": "AUD", "australian dollar": "AUD",
-
-    # SGD
     "sgd": "SGD", "singapore dollar": "SGD",
-
-    # AED
     "aed": "AED", "dirham": "AED",
-
-    # CHF
     "chf": "CHF", "swiss franc": "CHF",
-
-    # KRW
     "krw": "KRW", "won": "KRW", "korean won": "KRW",
-
-    # RUB
     "rub": "RUB", "ruble": "RUB", "rouble": "RUB",
-
-    # TRY
     "try": "TRY", "lira": "TRY", "turkish lira": "TRY",
-
-    # ZAR
     "zar": "ZAR", "rand": "ZAR", "south african rand": "ZAR"
 }
-
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
@@ -66,31 +36,48 @@ def webhook():
     try:
         params = req['queryResult']['parameters']
 
-        amount = 1
+        # ✅ Handle amount safely
+        amount = params.get('number', 1) or 1
 
         from_currency = params.get('unit-currency')
         to_currency = params.get('currency-name')
 
-        # Handle structured input
+        # ✅ Handle Dialogflow structured input
         if isinstance(from_currency, dict):
-            amount = from_currency.get('amount', 1)
+            amount = from_currency.get('amount', amount)
             from_currency = from_currency.get('currency')
 
-        # 🔥 NORMALIZATION (MOST IMPORTANT)
-        from_currency = str(from_currency).lower()
-        to_currency = str(to_currency).lower()
+        # ❌ Prevent crash
+        if not from_currency or not to_currency:
+            raise Exception("Missing currency")
 
-        from_currency = mapping.get(from_currency, from_currency.upper())
-        to_currency = mapping.get(to_currency, to_currency.upper())
+        # ✅ Normalize input
+        from_currency = str(from_currency).strip().lower()
+        to_currency = str(to_currency).strip().lower()
 
-        # API call
+        def normalize(curr):
+            if curr in mapping:
+                return mapping[curr]
+            return curr.upper()
+
+        from_currency = normalize(from_currency)
+        to_currency = normalize(to_currency)
+
+        # 🔍 Debug log (visible in Render logs)
+        print(f"FROM: {from_currency}, TO: {to_currency}, AMOUNT: {amount}")
+
+        # ✅ API call
         url = f"https://v6.exchangerate-api.com/v6/{API_KEY}/latest/{from_currency}"
         response = requests.get(url).json()
 
-        if response["result"] != "success":
+        if response.get("result") != "success":
             raise Exception("API failed")
 
-        rate = response['conversion_rates'][to_currency]
+        rate = response['conversion_rates'].get(to_currency)
+
+        if not rate:
+            raise Exception("Invalid currency")
+
         result = amount * rate
 
         return jsonify({
@@ -98,8 +85,9 @@ def webhook():
         })
 
     except Exception as e:
+        print("ERROR:", str(e))  # 🔥 check Render logs if needed
         return jsonify({
-            "fulfillmentText": "Sorry 😔 I couldn't process that. Try like: 1 USD to INR"
+            "fulfillmentText": "⚠️ Try like: 1 USD to INR or 100 rupees to dollars"
         })
 
 
