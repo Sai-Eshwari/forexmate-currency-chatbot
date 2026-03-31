@@ -29,6 +29,22 @@ mapping = {
     "zar": "ZAR", "rand": "ZAR", "south african rand": "ZAR"
 }
 
+# ✅ CORRECT NORMALIZE FUNCTION (ONLY ONE)
+def normalize(curr):
+    curr = str(curr).lower().strip()
+
+    # exact match
+    if curr in mapping:
+        return mapping[curr]
+
+    # match inside phrase (like "us dollars")
+    for key in mapping:
+        if key in curr:
+            return mapping[key]
+
+    return curr.upper()
+
+
 @app.route("/webhook", methods=["POST"])
 def webhook():
     req = request.get_json()
@@ -36,35 +52,27 @@ def webhook():
     try:
         params = req['queryResult']['parameters']
 
-        # ✅ Handle amount safely
+        # ✅ amount handling
         amount = params.get('number', 1) or 1
 
         from_currency = params.get('unit-currency')
         to_currency = params.get('currency-name')
 
-        # ✅ Handle Dialogflow structured input
+        # ✅ handle Dialogflow structured input
         if isinstance(from_currency, dict):
             amount = from_currency.get('amount', amount)
             from_currency = from_currency.get('currency')
 
-        # ❌ Prevent crash
+        # ❌ safety check
         if not from_currency or not to_currency:
             raise Exception("Missing currency")
 
-        # ✅ Normalize input
-        from_currency = str(from_currency).strip().lower()
-        to_currency = str(to_currency).strip().lower()
-
-        def normalize(curr):
-            if curr in mapping:
-                return mapping[curr]
-            return curr.upper()
-
+        # ✅ normalize properly
         from_currency = normalize(from_currency)
         to_currency = normalize(to_currency)
 
-        # 🔍 Debug log (visible in Render logs)
-        print(f"FROM: {from_currency}, TO: {to_currency}, AMOUNT: {amount}")
+        # 🔍 DEBUG (you can remove later)
+        print("FROM:", from_currency, "TO:", to_currency, "AMOUNT:", amount)
 
         # ✅ API call
         url = f"https://v6.exchangerate-api.com/v6/{API_KEY}/latest/{from_currency}"
@@ -85,7 +93,7 @@ def webhook():
         })
 
     except Exception as e:
-        print("ERROR:", str(e))  # 🔥 check Render logs if needed
+        print("ERROR:", str(e))
         return jsonify({
             "fulfillmentText": "⚠️ Try like: 1 USD to INR or 100 rupees to dollars"
         })
