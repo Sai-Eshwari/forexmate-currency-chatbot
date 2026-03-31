@@ -40,12 +40,12 @@ https://t.me/ForexMate_bot
 
 ## Tech Stack
 
-Frontend: HTML, CSS, JavaScript
-Backend: Flask (Python)
-NLP: Dialogflow
-API: ExchangeRate API
-Deployment: Render
-Integration: Telegram Bot
+* Frontend: HTML, CSS, JavaScript
+* Backend: Flask (Python)
+* NLP: Dialogflow
+* API: ExchangeRate API
+* Deployment: Render
+* Integration: Telegram Bot
 
 ---
 
@@ -119,8 +119,6 @@ It uses gunicorn as the production server.
 * Solved real-world issues such as parameter extraction and request handling
 
 ---
-
-## Screenshots
 
 ## Screenshots
 
