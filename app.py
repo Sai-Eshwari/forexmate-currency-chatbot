@@ -52,9 +52,21 @@ def webhook():
     try:
         params = req['queryResult']['parameters']
 
-        amount = params.get('number', 1) or 1
+        amount = params.get('number', 1)
+
+        # handle list issue
+        if isinstance(amount, list):
+            amount = amount[0]
+
         from_currency = params.get('unit-currency')
         to_currency = params.get('currency-name')
+
+        # handle list issue
+        if isinstance(from_currency, list):
+            from_currency = from_currency[0]
+
+        if isinstance(to_currency, list):
+            to_currency = to_currency[0]
 
         # ✅ Handle Dialogflow dict
         if isinstance(from_currency, dict):
