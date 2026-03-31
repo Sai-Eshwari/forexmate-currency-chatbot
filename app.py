@@ -29,7 +29,7 @@ mapping = {
     "zar": "ZAR", "rand": "ZAR", "south african rand": "ZAR"
 }
 
-# ✅ CORRECT NORMALIZE FUNCTION (ONLY ONE)
+# ✅ NORMALIZE FUNCTION
 def normalize(curr):
     curr = str(curr).lower().strip()
 
@@ -37,7 +37,7 @@ def normalize(curr):
     if curr in mapping:
         return mapping[curr]
 
-    # match inside phrase (like "us dollars")
+    # partial match (like "us dollars")
     for key in mapping:
         if key in curr:
             return mapping[key]
@@ -52,26 +52,31 @@ def webhook():
     try:
         params = req['queryResult']['parameters']
 
-        # ✅ amount handling
         amount = params.get('number', 1) or 1
-
         from_currency = params.get('unit-currency')
         to_currency = params.get('currency-name')
 
-        # ✅ handle Dialogflow structured input
+        # ✅ Handle Dialogflow dict
         if isinstance(from_currency, dict):
             amount = from_currency.get('amount', amount)
             from_currency = from_currency.get('currency')
+
+        # ✅ Handle Dialogflow LIST bug
+        if isinstance(from_currency, list):
+            from_currency = from_currency[0]
+
+        if isinstance(to_currency, list):
+            to_currency = to_currency[0]
 
         # ❌ safety check
         if not from_currency or not to_currency:
             raise Exception("Missing currency")
 
-        # ✅ normalize properly
+        # ✅ Normalize
         from_currency = normalize(from_currency)
         to_currency = normalize(to_currency)
 
-        # 🔍 DEBUG (you can remove later)
+        # 🔍 Debug (optional)
         print("FROM:", from_currency, "TO:", to_currency, "AMOUNT:", amount)
 
         # ✅ API call
@@ -83,13 +88,13 @@ def webhook():
 
         rate = response['conversion_rates'].get(to_currency)
 
-        if not rate:
+        if rate is None:
             raise Exception("Invalid currency")
 
         result = amount * rate
 
         return jsonify({
-            "fulfillmentText": f"{amount} {from_currency} = {round(result, 2)} {to_currency}"
+            "fulfillmentText": f"{amount} {from_currency} = {round(result, 4)} {to_currency}"
         })
 
     except Exception as e:
