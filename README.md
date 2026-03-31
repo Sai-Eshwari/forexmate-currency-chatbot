@@ -36,8 +36,6 @@ https://t.me/ForexMate_bot
 
 * Supports basic conversational inputs such as greetings and help queries
 
-* History panel in the web interface
-
 ---
 
 ## Tech Stack
