@@ -1,16 +1,17 @@
 from flask import Flask, request, jsonify
 import requests
+import re
+import traceback
 
 app = Flask(__name__)
 
-# Home route
 @app.route("/")
 def home():
     return "Server is running!"
 
 API_KEY = "6bacccc6e083e41a93b2b10f"
 
-# 🔥 UNIVERSAL CURRENCY MAPPING
+# 🔥 CURRENCY MAPPING
 mapping = {
     "usd": "USD", "dollar": "USD", "dollars": "USD", "$": "USD", "us dollar": "USD",
     "inr": "INR", "rupee": "INR", "rupees": "INR", "₹": "INR", "indian rupee": "INR",
@@ -29,15 +30,13 @@ mapping = {
     "zar": "ZAR", "rand": "ZAR", "south african rand": "ZAR"
 }
 
-# ✅ NORMALIZE FUNCTION
+# ✅ Normalize currency
 def normalize(curr):
     curr = str(curr).lower().strip()
 
-    # exact match
     if curr in mapping:
         return mapping[curr]
 
-    # partial match (like "us dollars")
     for key in mapping:
         if key in curr:
             return mapping[key]
@@ -50,48 +49,64 @@ def webhook():
     req = request.get_json()
 
     try:
-        params = req['queryResult']['parameters']
+        if not req:
+            return jsonify({"fulfillmentText": "Invalid request"})
 
-        amount = params.get('number', 1)
+        # =====================================
+        # ✅ CASE 1: UI INPUT
+        # =====================================
+        if "query" in req:
+            query = req["query"].lower()
 
-        # handle list issue
-        if isinstance(amount, list):
-            amount = amount[0]
+            match = re.search(
+                r'(\d+)?\s*([a-zA-Z₹$€¥£]+)\s*(to|in)\s*([a-zA-Z₹$€¥£]+)',
+                query
+            )
 
-        from_currency = params.get('unit-currency')
-        to_currency = params.get('currency-name')
+            if not match:
+                return jsonify({
+                    "fulfillmentText": "❌ Try: 1 USD to INR"
+                })
 
-        # handle list issue
-        if isinstance(from_currency, list):
-            from_currency = from_currency[0]
+            amount = match.group(1)
+            amount = float(amount) if amount else 1
 
-        if isinstance(to_currency, list):
-            to_currency = to_currency[0]
+            from_currency = normalize(match.group(2))
+            to_currency = normalize(match.group(4))
 
-        # ✅ Handle Dialogflow dict
-        if isinstance(from_currency, dict):
-            amount = from_currency.get('amount', amount)
-            from_currency = from_currency.get('currency')
+        # =====================================
+        # ✅ CASE 2: DIALOGFLOW INPUT
+        # =====================================
+        else:
+            params = req['queryResult']['parameters']
 
-        # ✅ Handle Dialogflow LIST bug
-        if isinstance(from_currency, list):
-            from_currency = from_currency[0]
+            amount = params.get('number', 1)
+            if isinstance(amount, list):
+                amount = amount[0]
 
-        if isinstance(to_currency, list):
-            to_currency = to_currency[0]
+            from_currency = params.get('unit-currency')
+            to_currency = params.get('currency-name')
 
-        # ❌ safety check
-        if not from_currency or not to_currency:
-            raise Exception("Missing currency")
+            if isinstance(from_currency, list):
+                from_currency = from_currency[0]
+            if isinstance(to_currency, list):
+                to_currency = to_currency[0]
 
-        # ✅ Normalize
-        from_currency = normalize(from_currency)
-        to_currency = normalize(to_currency)
+            if isinstance(from_currency, dict):
+                amount = from_currency.get('amount', amount)
+                from_currency = from_currency.get('currency')
 
-        # 🔍 Debug (optional)
-        print("FROM:", from_currency, "TO:", to_currency, "AMOUNT:", amount)
+            if not from_currency or not to_currency:
+                return jsonify({
+                    "fulfillmentText": "❌ Please specify both currencies"
+                })
 
-        # ✅ API call
+            from_currency = normalize(from_currency)
+            to_currency = normalize(to_currency)
+
+        # =====================================
+        # ✅ API CALL
+        # =====================================
         url = f"https://v6.exchangerate-api.com/v6/{API_KEY}/latest/{from_currency}"
         response = requests.get(url).json()
 
@@ -103,16 +118,16 @@ def webhook():
         if rate is None:
             raise Exception("Invalid currency")
 
-        result = amount * rate
+        result = float(amount) * rate
 
         return jsonify({
             "fulfillmentText": f"{amount} {from_currency} = {round(result, 4)} {to_currency}"
         })
 
     except Exception as e:
-        print("ERROR:", str(e))
+        traceback.print_exc()
         return jsonify({
-            "fulfillmentText": "⚠️ Try like: 1 USD to INR or 100 rupees to dollars"
+            "fulfillmentText": "⚠️ Something went wrong. Try again."
         })
 
 
